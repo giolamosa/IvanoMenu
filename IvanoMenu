@@ -7449,17 +7449,21 @@ package.preload['src.components.Locker'] = function()
         end)
     end
 
-    local function runSequence()
+   local function runSequence()
         if _locker_state.sequenceRunning then return end
-        if not buildSteps() then return end
+        if not buildSteps() then 
+            shared.notification:show("Locker: You already have all selected equipment.", shared.notification.types.INFO)
+            return 
+        end
 
         _locker_state.sequenceRunning = true
         _locker_state.stepIndex = 0
         samp_send_hidden_command("locker")
 
+        -- Safety timeout: Turn off the sequence if the server stops responding
         lua_thread.create(function()
-            wait(1000)
-            if _locker_state.sequenceRunning and _locker_state.stepIndex == 0 then
+            wait(4000) 
+            if _locker_state.sequenceRunning then
                 _locker_state.sequenceRunning = false
             end
         end)
@@ -7476,25 +7480,21 @@ package.preload['src.components.Locker'] = function()
                 _locker_state.stepIndex = _locker_state.stepIndex + 1
                 local step = _locker_state.steps[_locker_state.stepIndex]
 
+                -- If the script has no more steps left, it means this is a leftover dialog from the server.
                 if not step then
+                    -- Silently send a "Close/Escape" response to the server
+                    sampSendDialogResponse(id, 0, 0, '')
                     _locker_state.sequenceRunning = false
-                    return false
+                    return false -- Keep it hidden
                 end
 
                 lua_thread.create(function()
-                    wait(150)
-                    if step.response == 1 then
-                        sampSetCurrentDialogListItem(step.listitem)
-                        wait(50)
-                    end
-
+                    -- Pace the selection so the server doesn't drop requests
+                    wait(250)
                     sampSendDialogResponse(id, step.response, step.listitem, '')
-
-                    if _locker_state.stepIndex >= #_locker_state.steps then
-                        runTailKeys()
-                    end
                 end)
 
+                -- Returning false hides the dialog visually in the background!
                 return false 
             end
         )
