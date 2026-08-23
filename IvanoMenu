@@ -7376,7 +7376,7 @@ package.preload['src.components.Locker'] = function()
         steps = {}
     }
 
-    local function buildSteps()
+   local function buildSteps()
         _locker_state.steps = {}
         local weaponQueue = {}
 
@@ -7396,7 +7396,10 @@ package.preload['src.components.Locker'] = function()
 
         local tacticalIdx = -1
         local loadoutNum = _config.tactical.loadout[0]
-        if loadoutNum >= 1 and loadoutNum <= 5 and getCharArmour(PLAYER_PED) < 100 then
+        
+        -- REMOVED: The 'getCharArmour(PLAYER_PED) < 100' armor restriction.
+        -- It will now ALWAYS grab your loadout if you have one selected in the menu!
+        if loadoutNum >= 1 and loadoutNum <= 5 then
             tacticalIdx = TACTICAL_LOADOUTS[loadoutNum]
         end
 
@@ -7410,7 +7413,6 @@ package.preload['src.components.Locker'] = function()
             for _, wIdx in ipairs(weaponQueue) do
                 table.insert(_locker_state.steps, { response = 1, listitem = wIdx })
             end
-            -- Fix: Always back out to the main menu when done picking weapons
             table.insert(_locker_state.steps, { response = 0, listitem = 0 }) 
         end
 
@@ -7418,16 +7420,13 @@ package.preload['src.components.Locker'] = function()
         if tacticalIdx ~= -1 then
             table.insert(_locker_state.steps, { response = 1, listitem = 1 }) -- Main -> Tactical
             table.insert(_locker_state.steps, { response = 1, listitem = tacticalIdx })
-            -- Back out to the main menu when done picking tactical
             table.insert(_locker_state.steps, { response = 0, listitem = 0 }) 
         end
         
-        -- Fix: Add a final "Cancel" step to cleanly close the main menu 
         table.insert(_locker_state.steps, { response = 0, listitem = 0 })
 
         return true
     end
-
     local function runSequence()
         if _locker_state.sequenceRunning then return end
         if not buildSteps() then 
