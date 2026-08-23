@@ -7333,19 +7333,12 @@ end
 
 package.preload['src.components.Locker'] = function()
     -- Module: src/components/Locker.lua
-    local ffi = require("ffi")
     local imgui = require("upmimgui")
     local fa = require("fAwesome7")
     local carboneum = require("carbjsonconfig")
     
     local shared = require("src.shared")
     local MainWindow = require("src.ui.MainWindow")
-
-    pcall(function()
-        ffi.cdef[[
-            void keybd_event(uint8_t bVk, uint8_t bScan, uint32_t dwFlags, uintptr_t dwExtraInfo);
-        ]]
-    end)
 
     local CONFIG_PATH = "config/ivano/locker.json"
 
@@ -7375,16 +7368,6 @@ package.preload['src.components.Locker'] = function()
 
     local TACTICAL_LOADOUTS = {
         [1] = 0, [2] = 1, [3] = 2, [4] = 3, [5] = 4,
-    }
-
-    local VK_RETURN = 0x0D
-    local VK_ESCAPE = 0x1B
-    local KEYEVENTF_KEYUP = 0x0002
-
-    local TAIL_KEYS = {
-        { key = VK_RETURN, delay = 150 },
-        { key = VK_ESCAPE, delay = 150 },    
-        
     }
 
     local _locker_state = {
@@ -7421,35 +7404,31 @@ package.preload['src.components.Locker'] = function()
             return false
         end
 
-        table.insert(_locker_state.steps, { response = 1, listitem = 0 })
-
-        for _, wIdx in ipairs(weaponQueue) do
-            table.insert(_locker_state.steps, { response = 1, listitem = wIdx })
+        -- If we have weapons to take
+        if #weaponQueue > 0 then
+            table.insert(_locker_state.steps, { response = 1, listitem = 0 }) -- Main -> Weapons
+            for _, wIdx in ipairs(weaponQueue) do
+                table.insert(_locker_state.steps, { response = 1, listitem = wIdx })
+            end
+            -- Fix: Always back out to the main menu when done picking weapons
+            table.insert(_locker_state.steps, { response = 0, listitem = 0 }) 
         end
 
-        table.insert(_locker_state.steps, { response = 0, listitem = 0 })
-
+        -- If we have a tactical loadout
         if tacticalIdx ~= -1 then
-            table.insert(_locker_state.steps, { response = 1, listitem = 1 })
+            table.insert(_locker_state.steps, { response = 1, listitem = 1 }) -- Main -> Tactical
             table.insert(_locker_state.steps, { response = 1, listitem = tacticalIdx })
+            -- Back out to the main menu when done picking tactical
+            table.insert(_locker_state.steps, { response = 0, listitem = 0 }) 
         end
+        
+        -- Fix: Add a final "Cancel" step to cleanly close the main menu 
+        table.insert(_locker_state.steps, { response = 0, listitem = 0 })
 
         return true
     end
 
-    local function runTailKeys()
-        lua_thread.create(function()
-            for _, t in ipairs(TAIL_KEYS) do
-                wait(t.delay)
-                ffi.C.keybd_event(t.key, 0, 0, 0)
-                wait(30)
-                ffi.C.keybd_event(t.key, 0, KEYEVENTF_KEYUP, 0)
-            end
-            _locker_state.sequenceRunning = false
-        end)
-    end
-
-   local function runSequence()
+    local function runSequence()
         if _locker_state.sequenceRunning then return end
         if not buildSteps() then 
             shared.notification:show("Locker: You already have all selected equipment.", shared.notification.types.INFO)
@@ -7460,12 +7439,10 @@ package.preload['src.components.Locker'] = function()
         _locker_state.stepIndex = 0
         samp_send_hidden_command("locker")
 
-        -- Safety timeout: Turn off the sequence if the server stops responding
+        -- Safety timeout: Ensures the script unlocks itself after 5 seconds if the server lags
         lua_thread.create(function()
-            wait(4000) 
-            if _locker_state.sequenceRunning then
-                _locker_state.sequenceRunning = false
-            end
+            wait(5000)
+            _locker_state.sequenceRunning = false
         end)
     end
 
@@ -7480,21 +7457,27 @@ package.preload['src.components.Locker'] = function()
                 _locker_state.stepIndex = _locker_state.stepIndex + 1
                 local step = _locker_state.steps[_locker_state.stepIndex]
 
-                -- If the script has no more steps left, it means this is a leftover dialog from the server.
+                -- If an unexpected menu shows up, use a pure network signal to hit 'Cancel'
                 if not step then
-                    -- Silently send a "Close/Escape" response to the server
-                    sampSendDialogResponse(id, 0, 0, '')
-                    _locker_state.sequenceRunning = false
-                    return false -- Keep it hidden
+                    lua_thread.create(function()
+                        wait(100)
+                        sampSendDialogResponse(id, 0, 0, '')
+                    end)
+                    return false 
                 end
 
                 lua_thread.create(function()
-                    -- Pace the selection so the server doesn't drop requests
-                    wait(250)
+                    wait(200)
                     sampSendDialogResponse(id, step.response, step.listitem, '')
+                    
+                    if _locker_state.stepIndex >= #_locker_state.steps then
+                        lua_thread.create(function()
+                            wait(500)
+                            _locker_state.sequenceRunning = false
+                        end)
+                    end
                 end)
 
-                -- Returning false hides the dialog visually in the background!
                 return false 
             end
         )
