@@ -198,14 +198,20 @@ package.preload['src.ui.MainWindow'] = function()
         -- Title text & icon
         imgui.SetCursorPos(imgui.ImVec2(10, 5))
         local tex = _get_title_icon_texture()
+        local ok_img = false
         if tex then
-            imgui.Image(tex, imgui.ImVec2(18, 18))
-            imgui.SameLine()
-            imgui.SetCursorPosY(5)
-            imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
-            imgui.Text("Ivano Menu")
-            imgui.PopStyleColor()
-        else
+            local img_obj = (type(tex) == "cdata") and tex[0] or tex
+            local ok = pcall(imgui.Image, img_obj, imgui.ImVec2(18, 18))
+            if ok then
+                ok_img = true
+                imgui.SameLine()
+                imgui.SetCursorPosY(5)
+                imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
+                imgui.Text("Ivano Menu")
+                imgui.PopStyleColor()
+            end
+        end
+        if not ok_img then
             imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
             imgui.Text(fa("SHIELD_HALVED") .. "  Ivano Menu")
             imgui.PopStyleColor()
@@ -7915,7 +7921,7 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 12 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
+local current_script_version = 13 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
