@@ -169,53 +169,15 @@ package.preload['src.ui.MainWindow'] = function()
         return imgui.ColorConvertFloat4ToU32(v4)
     end
 
-    local _title_icon = nil
-    local function _get_title_icon_texture()
-        if _title_icon == nil then
-            _title_icon = false
-            local paths = {
-                getWorkingDirectory() .. "\\resource\\ivano.png",
-                getWorkingDirectory() .. "\\resources\\ivano.png",
-                getWorkingDirectory() .. "\\resource\\ivano.jpg",
-            }
-            for _, p in ipairs(paths) do
-                if doesFileExist(p) and imgui.CreateTextureFromFile then
-                    local status, tex = pcall(imgui.CreateTextureFromFile, p)
-                    if status and tex then
-                        _title_icon = tex
-                        break
-                    end
-                end
-            end
-        end
-        return _title_icon
-    end
-
     local function _render_title_bar()
         imgui.PushStyleColor(imgui.Col.ChildBg, BG_TITLE)
         imgui.BeginChild("##title_bar", imgui.ImVec2(W, TTL_H), false, imgui.WindowFlags.NoScrollbar)
 
         -- Title text & icon
         imgui.SetCursorPos(imgui.ImVec2(10, 5))
-        local tex = _get_title_icon_texture()
-        local ok_img = false
-        if tex then
-            local img_obj = (type(tex) == "cdata") and tex[0] or tex
-            local ok = pcall(imgui.Image, img_obj, imgui.ImVec2(18, 18))
-            if ok then
-                ok_img = true
-                imgui.SameLine()
-                imgui.SetCursorPosY(5)
-                imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
-                imgui.Text("Ivano Menu")
-                imgui.PopStyleColor()
-            end
-        end
-        if not ok_img then
-            imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
-            imgui.Text(fa("SHIELD_HALVED") .. "  Ivano Menu")
-            imgui.PopStyleColor()
-        end
+        imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
+        imgui.Text(fa("SHIELD_HALVED") .. "  Ivano Menu")
+        imgui.PopStyleColor()
 
         -- Close button (right side)
         imgui.SameLine(W - 34)
@@ -7921,7 +7883,7 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 13 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
+local current_script_version = 14 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
