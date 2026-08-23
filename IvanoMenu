@@ -6754,7 +6754,7 @@ package.preload['src.components.Misc'] = function()
     local SPRUNK_WAIT_TIME = 0.050
     local SPECIAL_ACTION_DRINK_SPRUNK = 23
     
-    local CONFIG_PATH = "config/ivano/miscellaneous.json"
+    local CONFIG_PATH = "config/ivano/misc.json"
     
     local default_data = {
         font = {
@@ -7310,9 +7310,9 @@ package.preload['src.components.Misc'] = function()
         _register_commands()
         _register_hotkeys()
     
-        MainWindow:add_page("miscellaneous", {
+        MainWindow:add_page("misc", {
             icon = fa("ELLIPSIS"),
-            title = "Miscellaneous",
+            title = "Misc",
             icon_box_color = imgui.ImVec4(0.6, 0.6, 0.6, 1),
             render_function = Misc.render_ui_settings
         })
