@@ -3570,7 +3570,7 @@ package.preload['src.components.AutoVest'] = function()
     }
 
     local GANGS = {
-        { id = "HY", name = "Gio Youth", color = imgui.ImVec4(1.0, 0.7412, 0.6314, 1.0), skins = {136, 230, 134, 212, 137} },
+        { id = "HY", name = "Hill Youth", color = imgui.ImVec4(1.0, 0.7412, 0.6314, 1.0), skins = {136, 230, 134, 212, 137} },
     }
 
     local CONFIG_PATH = "config/ivano/autovest.json"
@@ -7774,25 +7774,28 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 3 -- Set to 0 for testing
+local current_script_version = 2 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
-local function check_for_updates()
+-- We added 'is_manual' so it knows if a player typed the command or if it's the automatic startup check
+local function check_for_updates(is_manual)
     local AsyncHttpRequest = require("src.utils.AsyncHttpRequest")
     
-    sampAddChatMessage("{BE60F7}[Updater Test] {FFFFFF}Connecting to GitHub securely...", -1)
+    if is_manual then
+        sampAddChatMessage("{BE60F7}[Ivano Menu] {FFFFFF}Checking for updates...", -1)
+    end
     
     AsyncHttpRequest:new("GET", version_url, nil, 10)
         :then_(function(response)
-            if not response or not response.text then
-                sampAddChatMessage("{BE60F7}[Updater Test] {FFFFFF}Failed to read version file.", -1)
-                return
+            if not response or not response.text then 
+                if is_manual then
+                    sampAddChatMessage("{BE60F7}[Ivano Menu] {FFFFFF}Failed to connect to GitHub.", -1)
+                end
+                return 
             end
             
             local online_version = tonumber(response.text:match("%d+")) 
-            
-            sampAddChatMessage(string.format("{BE60F7}[Updater Test] {FFFFFF}Online Version: %s | Local Version: %s", tostring(online_version), tostring(current_script_version)), -1)
             
             if online_version and online_version > current_script_version then
                 sampAddChatMessage("{BE60F7}[Ivano Menu] {FFFFFF}New update found! Downloading...", -1)
@@ -7806,25 +7809,49 @@ local function check_for_updates()
                                 f:close()
                                 sampAddChatMessage("{BE60F7}[Ivano Menu] {FFFFFF}Update complete! Reloading script...", -1)
                                 thisScript():reload()
-                            else
-                                sampAddChatMessage("{BE60F7}[Updater Test] {FFFFFF}Failed to write to script file.", -1)
                             end
-                        else
-                            sampAddChatMessage("{BE60F7}[Updater Test] {FFFFFF}Failed to download script code.", -1)
                         end
                     end)
-                    :catch(function(err)
-                        sampAddChatMessage("{BE60F7}[Updater Test] {FFFFFF}Script download error: " .. tostring(err), -1)
-                    end)
             else
-                sampAddChatMessage("{BE60F7}[Updater Test] {FFFFFF}No update needed.", -1)
+                if is_manual then
+                    sampAddChatMessage("{BE60F7}[Ivano Menu] {FFFFFF}You are already using the latest version!", -1)
+                end
             end
-        end)
-        :catch(function(err)
-            sampAddChatMessage("{BE60F7}[Updater Test] {FFFFFF}Version check error: " .. tostring(err), -1)
         end)
 end
 -- ========================================================
+
+    function main()
+            
+        sampRegisterChatCommand("pcap", togglePointCapture)
+        sampRegisterChatCommand("tcap", toggleTurfCapture)
+        
+        -- REGISTER YOUR MANUAL UPDATE COMMAND HERE
+        sampRegisterChatCommand("updateivano", function()
+            check_for_updates(true) -- 'true' means they typed it manually
+        end)
+        
+        while not isSampAvailable() do wait(0) end
+        
+        -- Automatic startup check
+        check_for_updates(false) -- 'false' keeps it silent on startup
+        
+        setup_directories()
+        initialize_components()
+        register_commands()
+        shared.event_handler:process("onScriptInit")
+        local timestamp = os.date("%m/%d/%Y %I:%M %p", __luapack_timestamp)
+        msg(string.format("Packed on: {BE60F7}%s{FFFFFF}. Use {BE60F7}/avmenu cmds{FFFFFF}.", timestamp))
+        
+        while true do
+            process_player_tick()
+            wait(0)
+        end
+    end
+
+end
+
+return require('src.main')
 
     function main()
             
