@@ -3550,6 +3550,7 @@ package.preload['src.components.AutoVest'] = function()
 
     local carboneum = require("carbjsonconfig")
     local fa = require("fAwesome7")
+    local ffi = require("ffi")
     local imgui = require("upmimgui")
 
     local Colors = require("src.core.Colors")
@@ -3569,11 +3570,17 @@ package.preload['src.components.AutoVest'] = function()
         GANG = 1,
     }
 
-    local GANGS = {
-        { id = "HY", name = "Hilltop Youth", color = imgui.ImVec4(1.0, 0.7412, 0.6314, 1.0), skins = {136, 230, 134, 212, 137} },
-    }
-
     local CONFIG_PATH = "config/ivano/autovest.json"
+
+    local DEFAULT_GANGS = {
+        {
+            id = "HY",
+            name = "Hilltop Youth",
+            color = { 1.0, 0.7412, 0.6314, 1.0 },
+            skins = { 136, 230, 134, 212, 137 },
+            enabled = true
+        }
+    }
 
     local default_data = {
         is_enabled = imgui.new.bool(true),
@@ -3587,7 +3594,7 @@ package.preload['src.components.AutoVest'] = function()
         vester_mode = imgui.new.int(VESTER_MODE.EVERYONE),
         offer_if_armor_below = imgui.new.int(48),
         friends = {},
-        gang_enabled = {},
+        gangs = DEFAULT_GANGS,
         overlay = Overlay.setup_overlay_defaults(
             true, 0.004, 0.532, 14, 8, 5, 4,
             true, { 0, 0, 0, 0.588 },
@@ -3597,7 +3604,10 @@ package.preload['src.components.AutoVest'] = function()
     default_data.overlay.only_show_during_countdown = imgui.new.bool(false)
 
     local _config = default_data
-    local _gang_toggles = {}
+
+    local _new_gang_name = imgui.new.char[64]("")
+    local _new_gang_skins = imgui.new.char[128]("")
+    local _new_gang_color = imgui.new.float[4](0.2, 0.7, 1.0, 1.0)
 
     local _auto_vest_state = {
         timers = {
@@ -3611,25 +3621,68 @@ package.preload['src.components.AutoVest'] = function()
         return _auto_vest_state.timers[_config.command_mode.current[0]]
     end
 
-    local function _init_gang_toggles()
-        for _, gang in ipairs(GANGS) do
-            local enabled = _config.gang_enabled[gang.id]
-            if enabled == nil then enabled = false end
-            _gang_toggles[gang.id] = imgui.new.bool(enabled)
+    local function _parse_skins_string(str)
+        local skins = {}
+        for s in string.gmatch(str, "%d+") do
+            local skin_id = tonumber(s)
+            if skin_id then
+                table.insert(skins, skin_id)
+            end
+        end
+        return skins
+    end
+
+    local function _init_gang_buffers(gang)
+        if not gang._enabled_buf then
+            gang._enabled_buf = imgui.new.bool(gang.enabled == nil and true or gang.enabled)
+        end
+        if not gang._color_buf then
+            local c = gang.color or { 1.0, 1.0, 1.0, 1.0 }
+            gang._color_buf = imgui.new.float[4](c[1] or 1.0, c[2] or 1.0, c[3] or 1.0, c[4] or 1.0)
+        end
+        if not gang._skins_buf then
+            local skin_str = table.concat(gang.skins or {}, ", ")
+            gang._skins_buf = imgui.new.char[128](skin_str)
+        end
+        if not gang._name_buf then
+            gang._name_buf = imgui.new.char[64](gang.name or "")
         end
     end
 
-    local function _sync_gang_toggles_to_config()
-        for _, gang in ipairs(GANGS) do
-            _config.gang_enabled[gang.id] = _gang_toggles[gang.id][0]
+    local function _init_all_gang_buffers()
+        if not _config.gangs or type(_config.gangs) ~= "table" or #_config.gangs == 0 then
+            _config.gangs = DEFAULT_GANGS
+        end
+        for _, gang in ipairs(_config.gangs) do
+            _init_gang_buffers(gang)
+        end
+    end
+
+    local function _sync_gangs_to_config()
+        if not _config.gangs then return end
+        for _, gang in ipairs(_config.gangs) do
+            if gang._enabled_buf then
+                gang.enabled = gang._enabled_buf[0]
+            end
+            if gang._color_buf then
+                gang.color = { gang._color_buf[0], gang._color_buf[1], gang._color_buf[2], gang._color_buf[3] }
+            end
+            if gang._skins_buf then
+                gang.skins = _parse_skins_string(ffi.string(gang._skins_buf))
+            end
+            if gang._name_buf then
+                gang.name = ffi.string(gang._name_buf)
+            end
         end
     end
 
     local function _is_gang_skin(skin)
-        for _, gang in ipairs(GANGS) do
-            if _gang_toggles[gang.id] and _gang_toggles[gang.id][0] then
+        if not _config.gangs then return false end
+        for _, gang in ipairs(_config.gangs) do
+            local is_enabled = gang._enabled_buf and gang._enabled_buf[0] or (gang.enabled == nil and true or gang.enabled)
+            if is_enabled and gang.skins then
                 for _, s in ipairs(gang.skins) do
-                    if s == skin then return true end
+                    if tonumber(s) == tonumber(skin) then return true end
                 end
             end
         end
@@ -3782,7 +3835,7 @@ package.preload['src.components.AutoVest'] = function()
 
     function AutoVest:register()
         carboneum.load(CONFIG_PATH, _config)
-        _init_gang_toggles()
+        _init_all_gang_buffers()
         _register_event_handlers()
         _register_commands()
         MainWindow:add_page("auto_vest", {
@@ -3799,7 +3852,7 @@ package.preload['src.components.AutoVest'] = function()
     function AutoVest:get_overlay_config() return _config.overlay end
 
     function AutoVest:save_config()
-        _sync_gang_toggles_to_config()
+        _sync_gangs_to_config()
         carboneum.save(CONFIG_PATH, _config)
     end
 
@@ -3837,15 +3890,87 @@ package.preload['src.components.AutoVest'] = function()
         if _config.is_enabled[0] and _config.vester_mode[0] == VESTER_MODE.GANG then
             imgui.Dummy(imgui.ImVec2(0, 5))
             imgui.DrawChild("Gang Selection", function(width)
-                imgui.Text("Select which gangs to include in Auto Vest")
+                imgui.Text("Select and manage which gangs to include in Auto Vest")
                 imgui.Separator()
-                for _, gang in ipairs(GANGS) do
-                    imgui.PushStyleColor(imgui.Col.Text, gang.color)
-                    imgui.Text(fa("USERS") .. " " .. gang.name)
+
+                _init_all_gang_buffers()
+
+                local gang_to_delete = nil
+                for i, gang in ipairs(_config.gangs) do
+                    _init_gang_buffers(gang)
+
+                    imgui.PushIDInt(i)
+
+                    -- Color Picker for Gang
+                    imgui.ColorEdit4("##gang_color_" .. i, gang._color_buf, imgui.ColorEditFlags.NoInputs)
+                    _sync_gangs_to_config()
+
+                    imgui.SameLine()
+
+                    -- Gang Name in chosen color
+                    local col = imgui.ImVec4(gang._color_buf[0], gang._color_buf[1], gang._color_buf[2], gang._color_buf[3])
+                    imgui.PushStyleColor(imgui.Col.Text, col)
+                    imgui.Text(fa("USERS") .. " " .. (gang.name ~= "" and gang.name or ("Gang #" .. i)))
                     imgui.PopStyleColor()
-                    imgui.SameLine(width - imgui.ToggleButtonWidth())
-                    if imgui.ToggleButton("##gang_" .. gang.id, _gang_toggles[gang.id]) then
-                        _sync_gang_toggles_to_config()
+
+                    -- Enable/Disable Toggle
+                    imgui.SameLine(width - imgui.ToggleButtonWidth() - 35)
+                    if imgui.ToggleButton("##gang_toggle_" .. i, gang._enabled_buf) then
+                        _sync_gangs_to_config()
+                    end
+
+                    -- Delete button
+                    imgui.SameLine(width - 30)
+                    if imgui.Button(fa("TRASH_CAN") .. "##del_" .. i, imgui.ImVec2(24, 0)) then
+                        gang_to_delete = i
+                    end
+
+                    -- Display Skins List
+                    local skins_str = table.concat(gang.skins or {}, ", ")
+                    imgui.TextDisabled("   Skins: " .. (skins_str ~= "" and skins_str or "None"))
+
+                    imgui.Separator()
+                    imgui.PopID()
+                end
+
+                if gang_to_delete then
+                    table.remove(_config.gangs, gang_to_delete)
+                    _sync_gangs_to_config()
+                    carboneum.save(CONFIG_PATH, _config)
+                end
+
+                -- Add New Gang Form
+                imgui.Dummy(imgui.ImVec2(0, 3))
+                imgui.Text("Add New Gang:")
+                imgui.SetNextItemWidth(130)
+                imgui.InputTextWithHint("##new_gang_name", "Gang Name", _new_gang_name, ffi.sizeof(_new_gang_name))
+                imgui.SameLine()
+                imgui.SetNextItemWidth(170)
+                imgui.InputTextWithHint("##new_gang_skins", "Skins (e.g. 136, 230)", _new_gang_skins, ffi.sizeof(_new_gang_skins))
+                imgui.SameLine()
+                imgui.ColorEdit4("##new_gang_color", _new_gang_color, imgui.ColorEditFlags.NoInputs)
+                imgui.SameLine()
+                if imgui.Button(fa("PLUS") .. " Add") then
+                    local name = ffi.string(_new_gang_name)
+                    local skins_input = ffi.string(_new_gang_skins)
+                    if name ~= "" then
+                        local parsed_skins = _parse_skins_string(skins_input)
+                        local new_gang = {
+                            id = "GANG_" .. os.time() .. "_" .. math.random(100, 999),
+                            name = name,
+                            color = { _new_gang_color[0], _new_gang_color[1], _new_gang_color[2], _new_gang_color[3] },
+                            skins = parsed_skins,
+                            enabled = true
+                        }
+                        if not _config.gangs then _config.gangs = {} end
+                        table.insert(_config.gangs, new_gang)
+                        _init_gang_buffers(new_gang)
+                        _sync_gangs_to_config()
+                        carboneum.save(CONFIG_PATH, _config)
+
+                        -- Clear inputs
+                        _new_gang_name[0] = 0
+                        _new_gang_skins[0] = 0
                     end
                 end
             end)
@@ -7758,7 +7883,7 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 10 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
+local current_script_version = 11 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
