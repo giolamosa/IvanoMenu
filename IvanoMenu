@@ -921,15 +921,35 @@ package.preload['src.ui.NotificationManager'] = function()
     
 end
 
-function EventHandler:process(event_name, ...)
+package.preload['src.core.EventHandler'] = function()
+    -- Module: F:\2025\EDrive\dev\luapack\src\core\EventHandler.lua
+    
+    local EventHandler = {}
+    EventHandler.__index = EventHandler
+    
+    function EventHandler.new()
+        local self = setmetatable({}, EventHandler)
+        self.handlers = {}
+        return self
+    end
+    
+    function EventHandler:register(event_name, condition, action)
+        self.handlers[event_name] = self.handlers[event_name] or {}
+    
+        table.insert(self.handlers[event_name], {
+            condition = condition,
+            action = action
+        })
+    end
+    
+    function EventHandler:process(event_name, ...)
         local handlers = self.handlers[event_name]
         if not handlers then return ... end
-        
+    
         local should_return_false = false
         local last_result = nil
-        
+    
         for _, handler in ipairs(handlers) do
-            -- Upgraded to xpcall to catch and swallow deep engine-level thread panics
             local ok_cond, match = xpcall(handler.condition, debug.traceback, ...)
             if not ok_cond then
                 print(string.format("Error in condition for '%s': %s", event_name, match))
@@ -940,7 +960,7 @@ function EventHandler:process(event_name, ...)
                 else
                     ok_action, result = xpcall(handler.action, debug.traceback, ...)
                 end
-                
+    
                 if not ok_action then
                     print(string.format("Error in action for '%s': %s", event_name, result))
                 elseif result == false then
@@ -955,15 +975,19 @@ function EventHandler:process(event_name, ...)
                 end
             end
         end
-        
+    
         if should_return_false then
             return false
         elseif last_result then
             return last_result
         end
-        
+    
         return true
     end
+    
+    return EventHandler
+    
+end
 
 package.preload['src.core.HotkeyManager'] = function()
     -- Module: F:\2025\EDrive\dev\luapack\src\core\HotkeyManager.lua
