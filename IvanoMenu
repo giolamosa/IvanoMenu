@@ -7383,6 +7383,7 @@ package.preload['src.components.Locker'] = function()
 
     local TAIL_KEYS = {
         { key = VK_RETURN, delay = 150 },
+        { key = VK_ESCAPE, delay = 150 },    
         
     }
 
