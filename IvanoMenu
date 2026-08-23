@@ -3570,7 +3570,7 @@ package.preload['src.components.AutoVest'] = function()
     }
 
     local GANGS = {
-        { id = "HY", name = "Hill Youth", color = imgui.ImVec4(1.0, 0.7412, 0.6314, 1.0), skins = {136, 230, 134, 212, 137} },
+        { id = "HY", name = "Hilltop Youth", color = imgui.ImVec4(1.0, 0.7412, 0.6314, 1.0), skins = {136, 230, 134, 212, 137} },
     }
 
     local CONFIG_PATH = "config/ivano/autovest.json"
@@ -7697,9 +7697,6 @@ local function toggleTurfCapture()
     )
 end
 
--- Register commands ONLY ONCE
-
-
 --------------------------------------------------
 -- AUTO CAPTURE SERVER MESSAGE
 --------------------------------------------------
@@ -7710,29 +7707,21 @@ local function handleAutoCaptureMessage(color, text)
         return
     end
 
-    -- Detect:
-    -- "<Point Name> has become available for capture."
-    --
-    -- Plain string search is intentional.
-    -- We don't depend on the color or exact point name.
     if text:find("has become available for capture", 1, true) then
 
         if point_capture_enabled then
             lua_thread.create(function()
-                
                 sampSendChat("/capture")
             end)
         end
 
         if turf_capture_enabled then
             lua_thread.create(function()
-               
                 sampSendChat("/capturf")
             end)
         end
     end
 end
-
 
 --------------------------------------------------
 -- SERVER MESSAGE HOOK
@@ -7747,8 +7736,6 @@ if shared and shared.event_handler and shared.event_handler.register then
             if not text then
                 return false
             end
-
-            -- Only match the actual capture availability message.
             return text:find(
                 "has become available for capture",
                 1,
@@ -7757,14 +7744,7 @@ if shared and shared.event_handler and shared.event_handler.register then
         end,
 
         function(color, text)
-
             handleAutoCaptureMessage(color, text)
-
-            -- IMPORTANT:
-            -- Do NOT return false here.
-            --
-            -- Returning false makes onServerMessage()
-            -- suppress the original server message from chat.
             return true
         end
     )
@@ -7774,7 +7754,7 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 2 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
+local current_script_version = 1 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
@@ -7835,32 +7815,6 @@ end
         
         -- Automatic startup check
         check_for_updates(false) -- 'false' keeps it silent on startup
-        
-        setup_directories()
-        initialize_components()
-        register_commands()
-        shared.event_handler:process("onScriptInit")
-        local timestamp = os.date("%m/%d/%Y %I:%M %p", __luapack_timestamp)
-        msg(string.format("Packed on: {BE60F7}%s{FFFFFF}. Use {BE60F7}/avmenu cmds{FFFFFF}.", timestamp))
-        
-        while true do
-            process_player_tick()
-            wait(0)
-        end
-    end
-
-end
-
-return require('src.main')
-
-    function main()
-            
-        sampRegisterChatCommand("pcap", togglePointCapture)
-        sampRegisterChatCommand("tcap", toggleTurfCapture)
-        
-        while not isSampAvailable() do wait(0) end
-        
-        check_for_updates() -- Auto Updater check
         
         setup_directories()
         initialize_components()
