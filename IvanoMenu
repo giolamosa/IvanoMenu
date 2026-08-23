@@ -6580,7 +6580,7 @@ GANG = 1,
 
 local GANGS = {
 
-{ id = "HY", name = "Hilltop Youth", color = imgui.ImVec4(1.0, 0.7412, 0.6314, 1.0)s, skins = {136, 230, 134, 212, 137} },
+{ id = "HY", name = "Hilltop Youth", color = imgui.ImVec4(1.0, 0.7412, 0.6314, 1.0), skins = {136, 230, 134, 212, 137} },
 
 }
 
