@@ -169,15 +169,47 @@ package.preload['src.ui.MainWindow'] = function()
         return imgui.ColorConvertFloat4ToU32(v4)
     end
 
+    local _title_icon = nil
+    local function _get_title_icon_texture()
+        if _title_icon == nil then
+            _title_icon = false
+            local paths = {
+                getWorkingDirectory() .. "\\resource\\ivano.png",
+                getWorkingDirectory() .. "\\resources\\ivano.png",
+                getWorkingDirectory() .. "\\resource\\ivano.jpg",
+            }
+            for _, p in ipairs(paths) do
+                if doesFileExist(p) and imgui.CreateTextureFromFile then
+                    local status, tex = pcall(imgui.CreateTextureFromFile, p)
+                    if status and tex then
+                        _title_icon = tex
+                        break
+                    end
+                end
+            end
+        end
+        return _title_icon
+    end
+
     local function _render_title_bar()
         imgui.PushStyleColor(imgui.Col.ChildBg, BG_TITLE)
         imgui.BeginChild("##title_bar", imgui.ImVec2(W, TTL_H), false, imgui.WindowFlags.NoScrollbar)
 
-        -- Title text
+        -- Title text & icon
         imgui.SetCursorPos(imgui.ImVec2(10, 5))
-        imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
-        imgui.Text(fa("SHIELD-HALVED") .. "  Ivano Menu")
-        imgui.PopStyleColor()
+        local tex = _get_title_icon_texture()
+        if tex then
+            imgui.Image(tex, imgui.ImVec2(18, 18))
+            imgui.SameLine()
+            imgui.SetCursorPosY(5)
+            imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
+            imgui.Text("Ivano Menu")
+            imgui.PopStyleColor()
+        else
+            imgui.PushStyleColor(imgui.Col.Text, PRIMARY)
+            imgui.Text(fa("SHIELD_HALVED") .. "  Ivano Menu")
+            imgui.PopStyleColor()
+        end
 
         -- Close button (right side)
         imgui.SameLine(W - 34)
@@ -6754,7 +6786,7 @@ package.preload['src.components.Misc'] = function()
     local SPRUNK_WAIT_TIME = 0.050
     local SPECIAL_ACTION_DRINK_SPRUNK = 23
     
-    local CONFIG_PATH = "config/ivano/misc.json"
+    local CONFIG_PATH = "config/ivano/miscellaneous.json"
     
     local default_data = {
         font = {
@@ -7310,9 +7342,9 @@ package.preload['src.components.Misc'] = function()
         _register_commands()
         _register_hotkeys()
     
-        MainWindow:add_page("misc", {
+        MainWindow:add_page("miscellaneous", {
             icon = fa("ELLIPSIS"),
-            title = "Misc",
+            title = "Miscellaneous",
             icon_box_color = imgui.ImVec4(0.6, 0.6, 0.6, 1),
             render_function = Misc.render_ui_settings
         })
@@ -7883,7 +7915,7 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 11 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
+local current_script_version = 12 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
