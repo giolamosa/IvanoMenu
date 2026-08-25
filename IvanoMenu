@@ -3575,7 +3575,7 @@ package.preload['src.components.AutoVest'] = function()
     local DEFAULT_GANGS = {
         {
             id = "HY",
-            name = "Hilltop Youth",
+            name = "Achillies Bayot",
             color = { 1.0, 0.7412, 0.6314, 1.0 },
             skins = { 136, 230, 134, 212, 137 },
             enabled = true
@@ -7883,7 +7883,7 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 14 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
+local current_script_version = 15 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
