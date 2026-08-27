@@ -7456,6 +7456,308 @@ package.preload['src.components.Misc'] = function()
     
 end
 
+package.preload['src.components.Locker'] = function()
+    local carboneum = require("carbjsonconfig")
+    local fa = require("fAwesome7")
+    local imgui = require("upmimgui")
+    local vk = require("vkeys")
+    local ffi = require("ffi")
+
+    local MainWindow = require("src.ui.MainWindow")
+    local shared = require("src.shared")
+
+    ffi.cdef[[
+        void keybd_event(uint8_t bVk, uint8_t bScan, uint32_t dwFlags, uintptr_t dwExtraInfo);
+    ]]
+
+    local VK_RETURN = 0x0D
+    local VK_ESCAPE = 0x1B
+    local KEYEVENTF_KEYUP = 0x0002
+
+    local ALLOWED_SKINS = {
+        [136] = true,
+        [230] = true,
+        [134] = true,
+        [212] = true,
+        [137] = true
+    }
+
+    local CONFIG_PATH = "config/ivano/locker.json"
+
+    local default_data = {
+        is_enabled = imgui.new.bool(true),
+        hotkey = { vk.VK_X },
+        weapons = {
+            sniper = imgui.new.bool(true),
+            cuntgun = imgui.new.bool(false),
+            m4 = imgui.new.bool(false),
+            combat_shotgun = imgui.new.bool(false),
+            shotgun = imgui.new.bool(false),
+            deagle = imgui.new.bool(false)
+        },
+        tactical = {
+            loadout = imgui.new.int(0), -- 0 = None, 1-5
+            skip_if_100_armor = imgui.new.bool(true)
+        }
+    }
+
+    local _config = default_data
+
+    local _state = {
+        sequence_running = false,
+        step_index = 0,
+        steps = {},
+        has_loadout = false  -- track if last step is a loadout equip
+    }
+
+    local WEAPONS = {
+        { key = 'sniper',         id = 34, idx = 0 },
+        { key = 'cuntgun',        id = 33, idx = 1 },
+        { key = 'm4',             id = 31, idx = 2 },
+        { key = 'combat_shotgun', id = 27, idx = 3 },
+        { key = 'shotgun',        id = 25, idx = 4 },
+        { key = 'deagle',         id = 24, idx = 5 },
+    }
+
+    local loadoutNames = { 'None', 'Loadout 1', 'Loadout 2', 'Loadout 3', 'Loadout 4', 'Loadout 5' }
+
+    local function isSkinAllowed()
+        if not isCharDead(PLAYER_PED) then
+            local skin = getCharModel(PLAYER_PED)
+            return ALLOWED_SKINS[skin] == true
+        end
+        return false
+    end
+
+    -- Presses Enter then Escape to confirm equip and close the
+    -- main locker menu that the server returns to after equipping.
+    local function run_tail_keys()
+        lua_thread.create(function()
+            wait(300)
+            ffi.C.keybd_event(VK_RETURN, 0, 0, 0)
+            wait(30)
+            ffi.C.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
+            wait(300)
+            ffi.C.keybd_event(VK_ESCAPE, 0, 0, 0)
+            wait(30)
+            ffi.C.keybd_event(VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0)
+        end)
+    end
+
+    local function build_steps()
+        _state.steps = {}
+        _state.has_loadout = false
+
+        local weapon_queue = {}
+        for _, w in ipairs(WEAPONS) do
+            if _config.weapons[w.key][0] and not hasCharGotWeapon(PLAYER_PED, w.id) then
+                table.insert(weapon_queue, w.idx)
+            end
+        end
+
+        local loadout_num = _config.tactical.loadout[0]
+        local tactical_idx = -1
+
+        if loadout_num >= 1 and loadout_num <= 5 then
+            local armor_ok = true
+            if _config.tactical.skip_if_100_armor[0] then
+                armor_ok = getCharArmour(PLAYER_PED) < 100
+            end
+            if armor_ok then
+                tactical_idx = loadout_num - 1 -- 0-based
+            end
+        end
+
+        if #weapon_queue == 0 and tactical_idx == -1 then
+            return false
+        end
+
+        if #weapon_queue > 0 then
+            table.insert(_state.steps, { response = 1, listitem = 0 }) -- main menu → Weapons & Equipment
+            for _, wIdx in ipairs(weapon_queue) do
+                table.insert(_state.steps, { response = 1, listitem = wIdx }) -- Withdraw
+            end
+            table.insert(_state.steps, { response = 0, listitem = 0 }) -- Back → main menu
+        end
+
+        if tactical_idx ~= -1 then
+            table.insert(_state.steps, { response = 1, listitem = 1 }) -- main menu → Tactical
+            table.insert(_state.steps, { response = 1, listitem = tactical_idx }) -- Equip
+            _state.has_loadout = true -- last step is a loadout, needs tail keys
+        end
+
+        return true
+    end
+
+    local function run_sequence()
+        if _state.sequence_running then return end
+        if not build_steps() then return end
+
+        _state.sequence_running = true
+        _state.step_index = 0
+        sampSendChat('/locker')
+
+        lua_thread.create(function()
+            wait(8000)
+            if _state.sequence_running and _state.step_index == 0 then
+                _state.sequence_running = false
+            end
+        end)
+    end
+
+    local function _register_event_handlers()
+        shared.event_handler:register(
+            "SHOW_DIALOG",
+            function(id, style, title, button1, button2, text)
+                if _state.sequence_running then
+                    return { id }
+                end
+                return false
+            end,
+            function(id)
+                _state.step_index = _state.step_index + 1
+                local step = _state.steps[_state.step_index]
+
+                if not step then
+                    _state.sequence_running = false
+                    return false
+                end
+
+                sampSendDialogResponse(id, step.response, step.listitem, '')
+
+                if _state.step_index >= #_state.steps then
+                    _state.sequence_running = false
+                    -- Only run tail keys when a loadout was equipped.
+                    -- The server returns to the main locker menu after equipping,
+                    -- so Enter confirms and Escape closes that returned menu.
+                    if _state.has_loadout then
+                        run_tail_keys()
+                    end
+                end
+
+                return false -- hide dialog from screen
+            end
+        )
+
+        shared.event_handler:register(
+            "SERVER_MESSAGE",
+            function(color, text)
+                if _state.sequence_running then
+                    if text:match('not in range') or
+                       text:match('muted automatically') or
+                       text:match('recently shot') then
+                        _state.sequence_running = false
+                    end
+                end
+                return false
+            end,
+            function() end
+        )
+    end
+
+    local function _register_hotkeys()
+        shared.hotkey_manager:register(
+            "auto_locker",
+            _config.hotkey,
+            function()
+                if not _config.is_enabled[0] then return end
+                if sampIsChatInputActive() or sampIsDialogActive() or isSampfuncsConsoleActive() then return end
+
+                if not isSkinAllowed() then
+                    shared.notification:show(
+                        "Your current skin is not authorized to use the auto-locker.",
+                        shared.notification.types.ERROR
+                    )
+                    return
+                end
+
+                run_sequence()
+            end
+        )
+    end
+
+    local Locker = {}
+
+    function Locker:register()
+        carboneum.load(CONFIG_PATH, _config)
+        _register_event_handlers()
+        _register_hotkeys()
+
+        MainWindow:add_page("locker", {
+            icon = fa("BOX_ARCHIVE"),
+            title = "Locker",
+            icon_box_color = imgui.ImVec4(0.2, 0.6, 0.9, 1),
+            render_function = Locker.render_ui_settings
+        })
+    end
+
+    function Locker:save_config()
+        carboneum.save(CONFIG_PATH, _config)
+    end
+
+    function Locker:render_ui_settings()
+        imgui.DrawChild("Locker Settings", function(width)
+            imgui.Text("Enable Auto-Locker")
+            imgui.SameLine(width - imgui.ToggleButtonWidth())
+            imgui.ToggleButton("##locker_enable", _config.is_enabled)
+
+            imgui.Separator()
+
+            imgui.Text("Locker Hotkey")
+            imgui.SameLine(width - 100)
+            local new_keys = shared.hotkey_manager:draw_key_editor("auto_locker", imgui.ImVec2(100, 0))
+            if new_keys then _config.hotkey = new_keys end
+        end)
+
+        imgui.Dummy(imgui.ImVec2(0, 5))
+        imgui.DrawChild("Weapons Selection", function(width)
+            local w = _config.weapons
+
+            imgui.Columns(2, "weapon_cols", false)
+
+            imgui.Checkbox("Sniper Rifle", w.sniper)
+            imgui.Checkbox("M4 Rifle", w.m4)
+            imgui.Checkbox("Combat Shotgun", w.combat_shotgun)
+
+            imgui.NextColumn()
+
+            imgui.Checkbox("Country Rifle", w.cuntgun)
+            imgui.Checkbox("Shotgun", w.shotgun)
+            imgui.Checkbox("Desert Eagle", w.deagle)
+
+            imgui.Columns(1)
+        end)
+
+        imgui.Dummy(imgui.ImVec2(0, 5))
+        imgui.DrawChild("Tactical Loadout", function(width)
+            imgui.Text("Select Loadout:")
+            imgui.SameLine(width - 150)
+            imgui.SetNextItemWidth(150)
+
+            if imgui.BeginCombo("##loadout_combo", loadoutNames[_config.tactical.loadout[0] + 1]) then
+                for i, name in ipairs(loadoutNames) do
+                    local is_selected = (_config.tactical.loadout[0] == (i - 1))
+                    if imgui.Selectable(name, is_selected) then
+                        _config.tactical.loadout[0] = i - 1
+                    end
+                    if is_selected then
+                        imgui.SetItemDefaultFocus()
+                    end
+                end
+                imgui.EndCombo()
+            end
+
+            imgui.Separator()
+
+            imgui.Text("Skip loadout if 100 Armor")
+            imgui.SameLine(width - imgui.ToggleButtonWidth())
+            imgui.ToggleButton("##skip_armor", _config.tactical.skip_if_100_armor)
+        end)
+    end
+
+    return Locker
+end
+
 
 
 package.preload['src.main'] = function()
@@ -7583,6 +7885,7 @@ package.preload['src.main'] = function()
     local Find       = require("src.components.Find")
     local PedCounter = require("src.components.PedCounter")
     local Points     = require("src.components.Points")
+	local Locker     = require("src.components.Locker")
    
 
     local AcceptVestOverlay = require("src.overlays.AcceptVest")
@@ -7597,6 +7900,7 @@ package.preload['src.main'] = function()
         { component = Find,       overlay = nil },
         { component = PedCounter, overlay = PedCounterOverlay },
         { component = Points,     overlay = PointsOverlay },
+		{ component = Locker,     overlay = nil }
       
     }
 
@@ -7883,7 +8187,7 @@ end
 -- ===================== END POINT / TURF AUTO CAPTURE =====================
 
 -- ===================== AUTO UPDATER =====================
-local current_script_version = 16 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
+local current_script_version = 17 -- INCREASE THIS NUMBER BEFORE UPLOADING A NEW UPDATE TO GITHUB
 local script_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/IvanoMenu"
 local version_url = "https://raw.githubusercontent.com/giolamosa/IvanoMenu/refs/heads/main/version.txt"
 
